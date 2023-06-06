@@ -1,5 +1,6 @@
 from . import (
     dreamfusion,
+    dreambooth3d,
     fantasia3d,
     imagedreamfusion,
     latentnerf,

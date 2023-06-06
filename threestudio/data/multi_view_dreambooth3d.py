@@ -1,7 +1,12 @@
+import os
 import math
 import random
+import glob
 from dataclasses import dataclass
 
+import pdb
+from PIL import Image
+import numpy as np
 import pytorch_lightning as pl
 import torch
 import torch.nn.functional as F
@@ -18,7 +23,6 @@ from threestudio.utils.ops import (
 )
 from threestudio.utils.typing import *
 
-from .multi_view_dreambooth3d import RandomCameraDreambooth3DDataset
 
 @dataclass
 class RandomCameraDataModuleConfig:
@@ -47,6 +51,8 @@ class RandomCameraDataModuleConfig:
     eval_fovy_deg: float = 70.0
     light_sample_strategy: str = "dreamfusion"
     batch_uniform_azimuth: bool = True
+    first_stage: bool = False
+    custom_data_path: str = '/'
 
 
 class RandomCameraIterableDataset(IterableDataset):
@@ -414,8 +420,177 @@ class RandomCameraDataset(Dataset):
             'azimuth_deg': self.azimuth_deg,
         }
 
-@register("random-camera-datamodule")
-class RandomCameraDataModule(pl.LightningDataModule):
+class RandomCameraDreambooth3DDataset(Dataset):
+    def __init__(self, cfg: Any) -> None:
+        super().__init__()
+        self.cfg: RandomCameraDataModuleConfig = cfg
+
+        # Check if the custom data path is valid
+        if not os.path.isdir(self.cfg.custom_data_path):
+            raise ValueError(f"Invalid custom data path: {self.cfg.custom_data_path}")
+
+        # Get all the PNG files
+        self.data_files = glob.glob(self.cfg.custom_data_path + "/*.npz")
+
+        self.img_files = [f.replace(".npz", ".png") for f in self.data_files]
+
+        # Get the corresponding data files:
+        elevation_deg = []
+        azimuth_deg = []
+        for img_file in self.img_files:
+            data_file = img_file.replace(".png", ".npz")
+
+            data = np.load(data_file)
+            elevation_deg.append(data["elevation"].item())
+            azimuth_deg.append(data["azimuth"].item())
+
+        elevation_deg = torch.tensor(elevation_deg)
+        azimuth_deg = torch.tensor(azimuth_deg)
+
+        self.n_views = len(self.img_files)
+
+        camera_distances: Float[Tensor, "B"] = torch.full_like(
+            elevation_deg, self.cfg.eval_camera_distance
+        )
+
+        elevation = elevation_deg * math.pi / 180
+        azimuth = azimuth_deg * math.pi / 180
+
+        # convert spherical coordinates to cartesian coordinates
+        # right hand coordinate system, x back, y right, z up
+        # elevation in (-90, 90), azimuth from +x to +y in (-180, 180)
+        camera_positions: Float[Tensor, "B 3"] = torch.stack(
+            [
+                camera_distances * torch.cos(elevation) * torch.cos(azimuth),
+                camera_distances * torch.cos(elevation) * torch.sin(azimuth),
+                camera_distances * torch.sin(elevation),
+            ],
+            dim=-1,
+        )
+
+        self.setup(elevation, azimuth, camera_positions, camera_distances)
+
+    def setup(self, elevation, azimuth, camera_positions, camera_distances):
+
+        elevation_deg = elevation * 180 / math.pi
+        azimuth_deg = azimuth * 180 / math.pi
+
+        # default scene center at origin
+        center: Float[Tensor, "B 3"] = torch.zeros_like(camera_positions)
+        # default camera up direction as +z
+        up: Float[Tensor, "B 3"] = torch.as_tensor([0, 0, 1], dtype=torch.float32)[
+            None, :
+        ].repeat(self.cfg.eval_batch_size, 1)
+
+        fovy_deg: Float[Tensor, "B"] = torch.full_like(
+            elevation, self.cfg.eval_fovy_deg
+        )
+        fovy = fovy_deg * math.pi / 180
+        light_positions: Float[Tensor, "B 3"] = camera_positions
+
+        lookat: Float[Tensor, "B 3"] = F.normalize(center - camera_positions, dim=-1)
+        right: Float[Tensor, "B 3"] = F.normalize(torch.cross(lookat, up), dim=-1)
+        up = F.normalize(torch.cross(right, lookat), dim=-1)
+        c2w3x4: Float[Tensor, "B 3 4"] = torch.cat(
+            [torch.stack([right, up, -lookat], dim=-1), camera_positions[:, :, None]],
+            dim=-1,
+        )
+        c2w: Float[Tensor, "B 4 4"] = torch.cat(
+            [c2w3x4, torch.zeros_like(c2w3x4[:, :1])], dim=1
+        )
+        c2w[:, 3, 3] = 1.0
+
+        # get directions by dividing directions_unit_focal by focal length
+        focal_length: Float[Tensor, "B"] = (
+            0.5 * self.cfg.eval_height / torch.tan(0.5 * fovy)
+        )
+        directions_unit_focal = get_ray_directions(
+            H=self.cfg.eval_height, W=self.cfg.eval_width, focal=1.0
+        )
+        directions: Float[Tensor, "B H W 3"] = directions_unit_focal[
+            None, :, :, :
+        ].repeat(self.n_views, 1, 1, 1)
+        directions[:, :, :, :2] = (
+            directions[:, :, :, :2] / focal_length[:, None, None, None]
+        )
+
+        rays_o, rays_d = get_rays(directions, c2w, keepdim=True)
+        proj_mtx: Float[Tensor, "B 4 4"] = get_projection_matrix(
+            fovy, self.cfg.width / self.cfg.height, 0.1, 1000.0
+        )  # FIXME: hard-coded near and far
+        mvp_mtx: Float[Tensor, "B 4 4"] = get_mvp_matrix(c2w, proj_mtx)
+
+        self.rays_o, self.rays_d = rays_o, rays_d
+        self.mvp_mtx = mvp_mtx
+        self.c2w = c2w
+        self.camera_positions = camera_positions
+        self.light_positions = light_positions
+        self.elevation, self.azimuth = elevation, azimuth
+        self.elevation_deg, self.azimuth_deg = elevation_deg, azimuth_deg
+        self.camera_distances = camera_distances
+
+    def __len__(self):
+        return self.n_views
+
+    def __getitem__(self, index):
+
+        img_i_path = self.img_files[index]
+        img_i = torch.from_numpy(np.array(Image.open(img_i_path))).float() / 255.0
+
+        return {
+            "index": index,
+            "img": img_i,
+            "rays_o": self.rays_o[index],
+            "rays_d": self.rays_d[index],
+            "mvp_mtx": self.mvp_mtx[index],
+            "c2w": self.c2w[index],
+            "camera_positions": self.camera_positions[index],
+            "light_positions": self.light_positions[index],
+            "elevation": self.elevation_deg[index],
+            "azimuth": self.azimuth_deg[index],
+            "camera_distances": self.camera_distances[index],
+        }
+
+    def collate(self, batch):
+        batch = torch.utils.data.default_collate(batch)
+        batch.update({"height": self.cfg.eval_height, "width": self.cfg.eval_width})
+        return batch
+
+    @staticmethod
+    def from_state_dict(state_dict, cfg):
+        dataset = RandomCameraDataset(cfg, "val")
+
+        elevation_deg = state_dict["elevation_deg"]
+        azimuth_deg = state_dict["azimuth_deg"]
+
+        camera_distances: Float[Tensor, "B"] = torch.full_like(
+            elevation_deg, cfg.eval_camera_distance)
+        
+        camera_positions: Float[Tensor, "B 3"] = torch.stack(
+            [
+                camera_distances * torch.cos(elevation_deg * math.pi / 180) * torch.cos(azimuth_deg * math.pi / 180),
+                camera_distances * torch.cos(elevation_deg * math.pi / 180) * torch.sin(azimuth_deg * math.pi / 180),
+                camera_distances * torch.sin(elevation_deg * math.pi / 180),
+            ],
+            dim=-1,
+        )
+
+        elevation = elevation_deg * math.pi / 180
+        azimuth = azimuth_deg * math.pi / 180
+
+        dataset.setup(elevation, azimuth, camera_positions, camera_distances)
+
+        return dataset
+    
+    def state_dict(self):
+
+        return {
+            'elevation_deg': self.elevation_deg,
+            'azimuth_deg': self.azimuth_deg,
+        }
+    
+@register("dreambooth3d-random-camera-datamodule")
+class DreamBooth3DRandomCameraDataModule(pl.LightningDataModule):
     cfg: RandomCameraDataModuleConfig
 
     def __init__(self, cfg: Optional[Union[dict, DictConfig]] = None) -> None:
@@ -423,6 +598,9 @@ class RandomCameraDataModule(pl.LightningDataModule):
         self.cfg = parse_structured(RandomCameraDataModuleConfig, cfg)
 
     def setup(self, stage=None) -> None:
+
+        print("Setting up stage", stage)
+
         if stage in [None, "fit"]:
             if self.cfg.first_stage:
                 self.train_dataset = RandomCameraIterableDataset(self.cfg)
@@ -471,20 +649,22 @@ class RandomCameraDataModule(pl.LightningDataModule):
             self.test_dataset, batch_size=1, collate_fn=self.test_dataset.collate
         )
 
-    def state_dict(self):
+    # def state_dict(self):
 
-        # Get all the poses used for training
-        validation_dict = self.val_dataset.state_dict()
-        testing_dict = self.test_dataset.state_dict()
+    #     state_dict = {}
 
-        return {
-            'val': validation_dict,
-            'test': testing_dict,
-        }
+    #     # Get all the poses used for training
+    #     validation_dict = self.val_dataset.state_dict()
+    #     # testing_dict = self.test_dataset.state_dict()
 
-    def load_state_dict(self, state_dict):
+    #     return {
+    #         'val': validation_dict,
+    #         # 'test': testing_dict,
+    #     }
 
-        # Setup the training, validation, and testing dataset
-        self.train_dataset = RandomCameraIterableDataset(self.cfg)
-        self.val_dataset = RandomCameraDataset.from_state_dict(state_dict['val'], self.cfg)
-        self.test_dataset = RandomCameraDataset.from_state_dict(state_dict['test'], self.cfg)
+    # def load_state_dict(self, state_dict):
+
+    #     # Setup the training, validation, and testing dataset
+    #     # self.train_dataset = RandomCameraIterableDataset(self.cfg)
+    #     self.val_dataset = RandomCameraDataset.from_state_dict(state_dict['val'], self.cfg)
+    #     # self.test_dataset = RandomCameraDataset.from_state_dict(state_dict['test'], self.cfg)

@@ -1,9 +1,11 @@
 from dataclasses import dataclass, field
 
+import os
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from diffusers import DDIMScheduler, DDPMScheduler, StableDiffusionPipeline
+from diffusers import DDIMScheduler, DDPMScheduler, StableDiffusionPipeline, UNet2DConditionModel
 from diffusers.utils.import_utils import is_xformers_available
 
 import threestudio
@@ -17,6 +19,7 @@ from threestudio.utils.typing import *
 class StableDiffusionGuidance(BaseObject):
     @dataclass
     class Config(BaseObject.Config):
+        pretrained_base_model: str = "CompVis/stable-diffusion-v1-4"
         pretrained_model_name_or_path: str = "runwayml/stable-diffusion-v1-5"
         enable_memory_efficient_attention: bool = False
         enable_sequential_cpu_offload: bool = False
@@ -49,17 +52,24 @@ class StableDiffusionGuidance(BaseObject):
             torch.float16 if self.cfg.half_precision_weights else torch.float32
         )
 
+        unet = UNet2DConditionModel.from_pretrained(os.path.join(self.cfg.pretrained_model_name_or_path, 'unet'))
+
+        unet = unet.to(self.weights_dtype)
+
         pipe_kwargs = {
             "tokenizer": None,
             "safety_checker": None,
             "feature_extractor": None,
             "requires_safety_checker": False,
             "torch_dtype": self.weights_dtype,
+            'unet': unet,
         }
+
         self.pipe = StableDiffusionPipeline.from_pretrained(
-            self.cfg.pretrained_model_name_or_path,
+            self.cfg.pretrained_base_model,
             **pipe_kwargs,
         ).to(self.device)
+
 
         if self.cfg.enable_memory_efficient_attention:
             if parse_version(torch.__version__) >= parse_version("2"):
@@ -99,7 +109,7 @@ class StableDiffusionGuidance(BaseObject):
         if self.cfg.use_sjc:
             # score jacobian chaining use DDPM
             self.scheduler = DDPMScheduler.from_pretrained(
-                self.cfg.pretrained_model_name_or_path,
+                self.cfg.pretrained_base_model,
                 subfolder="scheduler",
                 torch_dtype=self.weights_dtype,
                 beta_start=0.00085,
@@ -108,7 +118,7 @@ class StableDiffusionGuidance(BaseObject):
             )
         else:
             self.scheduler = DDIMScheduler.from_pretrained(
-                self.cfg.pretrained_model_name_or_path,
+                self.cfg.pretrained_base_model,
                 subfolder="scheduler",
                 torch_dtype=self.weights_dtype,
             )
