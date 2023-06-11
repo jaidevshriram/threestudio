@@ -35,6 +35,13 @@ def parse_args(input_args=None):
         help="Prompt for image generation.",
     )
 
+    parser.add_argument(
+        "--strength",
+        type=float,
+        default=None,
+        required=True,
+        help="Strength"
+    )
 
     if input_args is not None:
             args = parser.parse_args(input_args)
@@ -53,6 +60,7 @@ unet = UNet2DConditionModel.from_pretrained(
         subfolder="unet",
         torch_dtype=torch.float16
     )
+
 pipe = StableDiffusionImg2ImgPipeline.from_pretrained(model_id_or_path, torch_dtype=torch.float16, unet=unet, safety_checker=None)
 pipe.scheduler = DDIMScheduler.from_config(pipe.scheduler.config)
 pipe = pipe.to(device)
@@ -66,10 +74,13 @@ pipe = pipe.to(device)
 for filename in os.listdir(args.input_folder):
     if filename.endswith("_rgb.png"):
         print(filename)
-        init_image = Image.open(args.input_folder + '/' + filename).convert("RGB")
+        init_image = Image.open(args.input_folder + filename).convert("RGB")
         init_image = init_image.resize((512, 512))
+
+        # init_image.save(args.input_folder + '/bu' + filename)
+
         prompt = args.prompt #"A fantasy landscape, trending on artstation"
-        images = pipe(prompt=prompt, image=init_image, strength=1.0, guidance_scale=7.5).images
+        images = pipe(prompt=prompt, image=init_image, strength=args.strength, guidance_scale=7.5).images
 
         filename = filename.split('_')[0] + '.png'
         images[0].save(args.input_folder + '/' + filename)

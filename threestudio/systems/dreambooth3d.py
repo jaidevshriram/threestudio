@@ -70,7 +70,7 @@ class DreamBooth3D(BaseLift3DSystem):
         self.log("train/loss_opaque", loss_opaque)
         loss += loss_opaque * self.C(self.cfg.loss.lambda_opaque)
 
-        # Reconstruction loss - MSE between the rendered image and the input image
+        # # Reconstruction loss - MSE between the rendered image and the input image
         loss_recon = torch.nn.MSELoss()(out["comp_rgb"], batch["img"])
         self.log("train/loss_recon", loss_recon)
         loss += loss_recon * self.C(self.cfg.loss.lambda_recon)
