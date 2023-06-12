@@ -20,7 +20,7 @@ You can run the threestudio_setup.sh file which will download this repository an
 ./threestudio_setup.sh
 . venv/bin/activate
 ```
-We use the StableDiffusion T2I model in the backbone and use the Dreambooth and Dreamfusion model for our approach. The Dreambooth model is taken from the [huggingface](https://huggingface.co/docs/diffusers/main/en/training/dreambooth) while Dreamfusion is implemented within threestudio. 
+We use the StableDiffusion T2I model in the backbone and use the Dreambooth and Dreamfusion model for our approach. The Dreambooth model is taken from  [huggingface](https://huggingface.co/docs/diffusers/main/en/training/dreambooth) while Dreamfusion is implemented within threestudio. 
 ## Dreambooth3D Approach
 The Dreambooth3D approach is split into 3 stages - 
 ### Stage 1
