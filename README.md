@@ -58,7 +58,7 @@ python launch.py --config configs/dreambooth3d-sd.yaml --train --gpu 0 system.pr
 Stage 3 is trained for 5000 iterations.
 
 ### Run all 3 stages together
-To run all the three stages for the dreambooth3d-sd.yaml (dog) (after obtaining the dreambooth checkpoints) use the following script
+To run all the three stages for the dreambooth3d-sd.yaml (dog) (after obtaining the dreambooth checkpoints - linked below) use the following script
 ```sh
 python run_3_stages.py --partial_model_name_or_path <path_to_partial_ckpt> --pretrained_model_name_or_path <path_to_model_dir> --fully_trained_model_name_or_path <path_to_fully_trained_ckpt> --strength <strength_value> --prompt <prompt_text>
 # example
