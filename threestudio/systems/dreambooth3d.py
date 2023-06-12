@@ -13,7 +13,7 @@ from threestudio.utils.typing import *
 class DreamBooth3D(BaseLift3DSystem):
     @dataclass
     class Config(BaseLift3DSystem.Config):
-        pass
+        first_stage: bool = False
 
     cfg: Config
 
@@ -70,10 +70,11 @@ class DreamBooth3D(BaseLift3DSystem):
         self.log("train/loss_opaque", loss_opaque)
         loss += loss_opaque * self.C(self.cfg.loss.lambda_opaque)
 
-        # # Reconstruction loss - MSE between the rendered image and the input image
-        loss_recon = torch.nn.MSELoss()(out["comp_rgb"], batch["img"])
-        self.log("train/loss_recon", loss_recon)
-        loss += loss_recon * self.C(self.cfg.loss.lambda_recon)
+        if not self.cfg.first_stage:
+            # # # Reconstruction loss - MSE between the rendered image and the input image
+            loss_recon = torch.nn.MSELoss()(out["comp_rgb"], batch["img"])
+            self.log("train/loss_recon", loss_recon)
+            loss += loss_recon * self.C(self.cfg.loss.lambda_recon)
 
         for name, value in self.cfg.loss.items():
             self.log(f"train_params/{name}", self.C(value))
