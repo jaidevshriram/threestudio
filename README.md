@@ -11,10 +11,13 @@ The following steps have been tested on Ubuntu20.04.
 - You must have a NVIDIA graphics card with at least 6GB VRAM and have [CUDA](https://developer.nvidia.com/cuda-downloads) installed.
 - Install `Python >= 3.8`.
 - (Optional, Recommended) Create a virtual environment:
-
-You can run the threestudio.sh file which will download this repository and setup the python environment. Then activate the python env using
+We have created a custom docker image listed below. Please note that the code is not compatible with GPU Versions lower than GeForce GTX 2080 Ti. 
 ```sh
-./threestudio.sh
+launch-scipy-ml.sh -i ghcr.io/shreyasumbetla/custom-docker:nightly -g 1 -m 16 -c 8 -s -v 2080ti
+```
+You can run the threestudio_setup.sh file which will download this repository and setup the python environment. Then activate the python env using
+```sh
+./threestudio_setup.sh
 . venv/bin/activate
 ```
 We use the StableDiffusion T2I model in the backbone and use the Dreambooth and Dreamfusion model for our approach. The Dreambooth model is taken from the repo while Dreamfusion is implemented within threestudio. 
@@ -24,7 +27,12 @@ The Dreambooth3D approach is split into 3 stages -
 A DreamBooth model which comprises of a text to image stable diffusion model is trained using 5-6 casually captured images of a given subject. In order to generate subject specific images, the text prompt uses a unique identifier along with the class it belongs to. 
 To train the dreambooth model you can run the following command 
 ```sh
-
+# download the subject images - for example to download the dog images
+python3 download_dog.py
+# to run dreambooth training script
+cd threestudio/scripts/
+python3 train_dreambooth_script.py --instance_dir <path to images> --instance_prompt <prompt_text with identifier> --output_dir <output_dir> --class_dir <where class images will be stored> --class_prompt <prompt for class>
+python3 train_dreambooth_script.py --instance_dir ./dog --instance_prompt "Photo of sks dog" --output_dir ./saved_model_dog --class_dir ./class_folder --class_prompt "Photo of a dog"
 ```
 The partially trained DreamBooth model is then combined with the DreamFusion which performs NeRF optimisation using Score Distillation Sampling (SDS) loss in order to generate 3D assets. We use an intermediate checkpoint of the dreambooth model (We have chosen checkpoint-500 as the optimal checkpoint based on our experiments). Ensure that the config file has the parameters set correctly (set first_stage to true, set the pretrained_model_name_or_path to the path to the model and checkpoint). To train the dreamfusion model run the following command
 ```
@@ -70,7 +78,8 @@ Brief introduction of the codestructure of the threestudio framework (As provide
 
 ### Our Contributions to the code
 - Added the threestudio/scripts/train_dreambooth.py and threestudio/scripts/train_dreambooth_script.py for training the dreambooth model for Stage 1.
-- Added the threestudio/systems/dreambooth3d.py script based off of the dreamfusion.py including our own dataset class for storing and loading random-viewpoints for Stage 2 and 3. Also added the reconstruction loss for Stage 3. 
+- Added the threestudio/systems/dreambooth3d.py script based off of the dreamfusion.py including our own dataset class. Also added the reconstruction loss for Stage 3. 
+- Added own dataset class in threestudio/data/multi_view_dreambooth3d.py for storing and loading random-viewpoints for Stage 2 and 3.
 - Added the  threestudio/scripts/dreambooth3d_img2img.py for Img2Img translation for Stage 2. 
 - Other changes to combine the code were made in the threestudio/data and threestudio/utils backend files and threestudio/models/guidance/stable_diffusion_guidance.py. 
 - We have also added config files for parameter-tuning for each of the prompts in the config folder.
