@@ -10,7 +10,7 @@ The following steps have been tested on Ubuntu20.04.
 
 - You must have a NVIDIA graphics card with at least 6GB VRAM and have [CUDA](https://developer.nvidia.com/cuda-downloads) installed.
 - Install `Python >= 3.8`.
-- (Optional, Recommended) Create a virtual environment:
+
 We have created a custom docker image listed below. Please note that the code is not compatible with GPU Versions lower than GeForce GTX 2080 Ti. 
 ```sh
 launch-scipy-ml.sh -i ghcr.io/shreyasumbetla/custom-docker:nightly -g 1 -m 16 -c 8 -s -v 2080ti
