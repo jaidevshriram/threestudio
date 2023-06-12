@@ -15,7 +15,11 @@ We have created a custom docker image listed below. Please note that the code is
 ```sh
 launch-scipy-ml.sh -i ghcr.io/shreyasumbetla/custom-docker:nightly -g 1 -m 16 -c 8 -s -v 2080ti
 ```
-You can run the threestudio_setup.sh file which will download this repository and setup the python environment. Then activate the python env using
+To clone the repo run
+```sh
+git clone -b dreambooth https://github.com/jaidevshriram/threestudio.git
+```
+You can also run the threestudio_setup.sh file which will download this repository and setup the python environment. Then activate the python env using
 ```sh
 ./threestudio_setup.sh
 . venv/bin/activate
