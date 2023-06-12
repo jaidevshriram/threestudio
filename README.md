@@ -58,7 +58,7 @@ python launch.py --config configs/dreambooth3d-sd.yaml --train --gpu 0 system.pr
 Stage 3 is trained for 5000 iterations.
 
 ### Run all 3 stages together
-To run all the three stages (after obtaining the dreambooth checkpoints) use the following script
+To run all the three stages for the dreambooth3d-sd.yaml (dog) (after obtaining the dreambooth checkpoints) use the following script
 ```sh
 python run_3_stages.py --partial_model_name_or_path <path_to_partial_ckpt> --pretrained_model_name_or_path <path_to_model_dir> --fully_trained_model_name_or_path <path_to_fully_trained_ckpt> --strength <strength_value> --prompt <prompt_text>
 # example
@@ -76,7 +76,7 @@ Brief introduction of the codestructure of the threestudio framework (As provide
 - All systems, modules, and data modules have their configurations in their own dataclasses.
 - Base configurations for the whole project can be found in `utils/config.py`. In the `ExperimentConfig` dataclass, `data`, `system`, and module configurations under `system` are parsed to configurations of each class mentioned above. These configurations are strictly typed, which means you can only use defined properties in the dataclass and stick to the defined type of each property. This configuration paradigm (1) natually supports default values for properties; (2) effectively prevents wrong assignments of these properties (say typos in the yaml file) or inappropriate usage at runtime.
 
-### Our Contributions to the code
+### Our Contributions to the Code
 - Added the threestudio/scripts/train_dreambooth.py and threestudio/scripts/train_dreambooth_script.py for training the dreambooth model for Stage 1.
 - Added the threestudio/systems/dreambooth3d.py script based off of the dreamfusion.py including our own dataset class. Also added the reconstruction loss for Stage 3. 
 - Added own dataset class in threestudio/data/multi_view_dreambooth3d.py for storing and loading random-viewpoints for Stage 2 and 3.
@@ -84,7 +84,24 @@ Brief introduction of the codestructure of the threestudio framework (As provide
 - Other changes to combine the code were made in the threestudio/data and threestudio/utils backend files and threestudio/models/guidance/stable_diffusion_guidance.py. 
 - We have also added config files for parameter-tuning for each of the prompts in the config folder.
 
-
+### Dreambooth Checkpoints 
+The already trained dreambooth checkpoints can be downloaded using the following links for each of the prompts
+- [Dog Checkpoint](https://drive.google.com/drive/folders/1uCMWirJosk7w_sF3ehsYCBhkxYH-rlsp?usp=drive_link) - [Images](https://drive.google.com/drive/folders/1YH7UQno8PGXcbw38Sy-94xUTAQ983pLY?usp=drive_link)
+```sh
+gdown --folder https://drive.google.com/drive/folders/1uCMWirJosk7w_sF3ehsYCBhkxYH-rlsp?usp=drive_link
+```
+- [Cat Checkpoint](https://drive.google.com/drive/folders/19C5flYMdfyGGcUxdqPtYeT9pffZ8ElwY?usp=drive_link) - [Images](https://drive.google.com/drive/folders/1VO3omjGxyngDhHWtBFAh0SmcQbdk-p9h?usp=drive_link)
+```sh
+gdown --folder https://drive.google.com/drive/folders/19C5flYMdfyGGcUxdqPtYeT9pffZ8ElwY?usp=drive_link
+```
+- [Clock Checkpoint](https://drive.google.com/drive/folders/1ETWUXvBP8EuIHMKP5B4MADRi44YCBbM9?usp=drive_link) - [Images](https://drive.google.com/drive/folders/1BrL7MpKAeHIEBK1_TkQcgjop7W1EBHnF?usp=drive_link)
+```sh
+gdown --folder https://drive.google.com/drive/folders/1ETWUXvBP8EuIHMKP5B4MADRi44YCBbM9?usp=drive_link
+```
+- [Can Checkpoint](https://drive.google.com/drive/folders/1OBwIW88LcGjTKh_x1OAhT9qZQnSMxKxo?usp=sharing) - [Images](https://drive.google.com/drive/folders/1eLLlnxJF2t7bUn1UcNsAv96y5RnyTppV?usp=drive_link)
+```sh
+gdown --folder https://drive.google.com/drive/folders/1OBwIW88LcGjTKh_x1OAhT9qZQnSMxKxo?usp=sharing
+```
 ## Team Members
 - Aishwarya Manjunath
 - Jaidev Shriram
