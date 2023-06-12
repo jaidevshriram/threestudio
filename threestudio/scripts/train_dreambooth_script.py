@@ -50,8 +50,6 @@ os.environ['PATH'] = '/home/{}/.local/bin'.format(os.environ.get("USERNAME")) + 
 
 os.system('accelerate config default')
 
-# python3 download_dog.py
-
 MODEL_NAME="CompVis/stable-diffusion-v1-4"
 INSTANCE_DIR=args.instance_dir
 OUTPUT_DIR=args.output_dir
