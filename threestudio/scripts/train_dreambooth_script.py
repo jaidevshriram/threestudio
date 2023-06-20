@@ -65,8 +65,8 @@ cmd = 'accelerate launch train_dreambooth.py \
   --output_dir={} \
   --with_prior_preservation \
   --prior_loss_weight=1.0 \
-  --instance_prompt={} \
-  --class_prompt={} \
+  --instance_prompt=\"{}\" \
+  --class_prompt=\"{}\" \
   --resolution={} \
   --train_batch_size={} \
   --gradient_accumulation_steps={} \
@@ -80,6 +80,7 @@ cmd = 'accelerate launch train_dreambooth.py \
   --num_class_images={} \
   --checkpointing_steps={} \
   --max_train_steps={}'.format(MODEL_NAME, INSTANCE_DIR, CLASS_DIR, OUTPUT_DIR, INSTANCE_PROMPT, CLASS_PROMPT, args.resolution, args.train_batch_size, args.gradient_accumulation_steps, args.lr, args.lr_warmup_steps, args.num_class_images, args.checkpointing_steps, args.max_train_steps)
+
 
 os.system(cmd)
 
